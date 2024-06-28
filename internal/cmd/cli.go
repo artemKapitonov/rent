@@ -1,11 +1,13 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/anacrolix/torrent"
+	"github.com/k0kubun/go-ansi"
+	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +28,7 @@ var rootCmd = &cobra.Command{
 
 var downlaodCmd = &cobra.Command{
 	Use: "download",
-	Short: `Предназначена для установки и загрузки торрент-файла с именем, указанным в параметре -f.
+	Short: `Предназначена для установки и загрузки торрент-файла.
 При использовании этой команды Rent будет загружать указанный торрент-файл на ваш компьютер.`,
 	Long: `Предназначена для установки и загрузки торрент-файла с именем, указанным в параметре -f.
 	При использовании этой команды Rent будет загружать указанный торрент-файл на ваш компьютер.`,
@@ -41,14 +43,30 @@ func Download(cmd *cobra.Command, args []string) {
 
 	tfile, err := client.AddTorrentFromFile(pathToFile)
 	cobra.CheckErr(err)
+
 	<-tfile.GotInfo()
 
-	go loading(tfile, client)
+	bar := progressbar.NewOptions(
+		int(tfile.Info().TotalLength()),
+		progressbar.OptionSetWriter(ansi.NewAnsiStdout()),
+		progressbar.OptionShowBytes(true),
+		progressbar.OptionShowCount(),
+		progressbar.OptionSetDescription(tfile.Info().BestName()),
+		progressbar.OptionFullWidth(),
+	)
+
+	go loading(tfile, client, bar)
 
 	tfile.DownloadAll()
 
 	client.WaitAll()
 
+
+	arr := strings.Split(pathToFile, "/")
+	newPath := "/home/kapitonov/Видео/films/" + tfile.Info().BestName()
+	arr[len(arr)-1] = tfile.Info().BestName()
+	err = os.Rename(strings.Join(arr, "/"), newPath)
+	cobra.CheckErr(err)
 }
 
 func Execute() {
@@ -63,17 +81,12 @@ func init() {
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
-func loading(tfile *torrent.Torrent, client *torrent.Client) {
+func loading(tfile *torrent.Torrent, client *torrent.Client, bar *progressbar.ProgressBar) {
+
 	for {
-		time.Sleep(2 * time.Second)
-		total := tfile.Info().TotalLength()
 		current := tfile.Stats().BytesReadData
-		fmt.Println(total, "total")
-		fmt.Println(current, "current")
-
-		proc := (float64(current.Int64()) / float64(total)) * 100
-		time.Sleep(1 * time.Second)
-		fmt.Println(proc)
+		time.Sleep(20 * time.Millisecond)
+		afterSecond := tfile.Stats().BytesReadData
+		bar.Add(int(afterSecond.Int64() - current.Int64()))
 	}
-
 }
