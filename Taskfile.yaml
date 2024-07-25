@@ -1,0 +1,11 @@
+version: "3"
+
+tasks:
+  install:
+    cmds:
+      - go build && go install
+      - rent completion zsh > /tmp/completion
+
+  completion:
+    cmds:
+      - rent completion zsh > /tmp/completion
