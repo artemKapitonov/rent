@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -18,15 +20,23 @@ var settingCmd = &cobra.Command{
 func SetOutDir(cmd *cobra.Command, args []string) {
 	outPath := args[0]
 
-	viper.SetConfigFile("/home/.config/rent/settings.yaml")
-
 	// Read in the config file
-	err := viper.ReadInConfig()
-	cobra.CheckErr(err)
-	// Update the value of out_dir
+	setConfigFile()
+
 	viper.Set("out_dir", outPath)
 
 	// Save the changes
-	err = viper.WriteConfig()
+	err := viper.WriteConfig()
+	cobra.CheckErr(err)
+}
+
+func setConfigFile() {
+	viper.AutomaticEnv()
+
+	homeEnv := viper.GetString("HOME")
+
+	viper.SetConfigFile(fmt.Sprintf("%s/.config/rent/settings.yaml", homeEnv))
+
+	err := viper.ReadInConfig()
 	cobra.CheckErr(err)
 }

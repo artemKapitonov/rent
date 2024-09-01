@@ -19,17 +19,6 @@ var rootCmd = &cobra.Command{
 просматривать статус загрузок и контролировать скорость скачивания, не покидая командную строку.
 
 Наслаждайтесь быстрым и эффективным скачиванием файлов с помощью Rent!"`,
-
-	// Run: initSettings,
-}
-
-func initSettings(cmd *cobra.Command, args []string) {
-	err := os.MkdirAll("/home/.config/rent", 0777)
-	cobra.CheckErr(err)
-
-	_, err = os.Create("/home/.config/rent/settings.yaml")
-	cobra.CheckErr(err)
-
 }
 
 func Execute() {
@@ -42,4 +31,5 @@ func Execute() {
 func init() {
 	rootCmd.AddCommand(downlaodCmd)
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.AddCommand(settingCmd)
 }

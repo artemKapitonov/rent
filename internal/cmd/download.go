@@ -3,11 +3,9 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"math/rand"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -15,6 +13,7 @@ import (
 	"github.com/anacrolix/torrent"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var stderr = os.Stderr
@@ -110,11 +109,11 @@ func shutdown(client *torrent.Client) {
 
 func move(pathToFile string, fileName string, done bool) error {
 	if done {
-		fmt.Fprintln(stderr, "File successfily downloaded :)")
+		fmt.Fprintln(stderr, "\nFile successfily downloaded :)")
 	} else {
 		fmt.Fprintln(stderr, "\n Download was paused ")
 	}
-	newPath := getNewPath(pathToFile, fileName)
+	newPath := getNewPath(fileName)
 	currentPath := getCurrentPath(fileName)
 
 	return rename(currentPath, newPath)
@@ -128,14 +127,11 @@ func getCurrentPath(name string) string {
 	return currentPath
 }
 
-// TODO: add defaul path from config
-func getNewPath(pathToFile string, name string) string {
-	arr := strings.Split(pathToFile, "/")
-	arr[len(arr)-1] = name
+// getNewPath returns path from .config/settings.yaml file + name of file.
+func getNewPath(name string) string {
+	setConfigFile()
 
-	newPath := "/home/kapitonov/Видео/rent/" + name
-
-	return newPath
+	return viper.GetString("out_dir") + name
 }
 
 // rename move file with check existing .
@@ -149,15 +145,30 @@ func rename(oldPath string, newPath string) error {
 	return err
 }
 
-// TODO: remake with path from .config/rent.yaml
-// checkExist is check if file or dir exist and add (1) for unicue name.
+// checkExist is check if file or dir exist and add Unix time for unicue name.
 func checkExist(err error, newPath string) string {
+	defPath := viper.GetString("out_dir")
+
 	if errors.Is(err, os.ErrExist) {
-		arr := strings.Split(filepath.Base(newPath), ".")
-		arr[len(arr)-2] += "." + strconv.Itoa(rand.Intn(1000))
-		newPath = "/home/kapitonov/Видео/rent/" + strings.Join(arr, ".")
+		newPath = getUniqueName(newPath, defPath)
 	}
 
+	return newPath
+}
+
+// getUniqueName returns unique file name for dircetory.
+func getUniqueName(newPath string, defPath string) string {
+	var indx int
+	arr := strings.Split(filepath.Base(newPath), ".")
+	if len(arr) >= 2 {
+		indx = len(arr) - 2
+	} else {
+		indx = 0
+	}
+
+	arr[indx] += fmt.Sprintf("_(%s)", time.Now().Format(time.DateTime))
+
+	newPath = defPath + "/" + strings.Join(arr, ".")
 	return newPath
 }
 
