@@ -18,14 +18,11 @@ import (
 
 var stderr = os.Stderr
 
-var validArgs = []string{"download", "settings"}
-
 var downlaodCmd = &cobra.Command{
 	Use: "download",
-	Short: `Предназначена для установки и загрузки торрент-файла.
-При использовании этой команды Rent будет загружать указанный торрент-файл на ваш компьютер.`,
-	Long: `Предназначена для установки и загрузки торрент-файла с именем, указанным в параметре -f.
-	При использовании этой команды Rent будет загружать указанный торрент-файл на ваш компьютер.`,
+	Short: `Designed for installing and downloading a torrent file.`,
+	Long: `Designed for installing and downloading a torrent file. When using this command,
+	Rent will download the specified torrent file to your computer.`,
 	Run:               download,
 	Args:              cobra.MinimumNArgs(1),
 	Example:           "rent download path/to/<some_name>.torrent",
@@ -180,6 +177,9 @@ func loading(tfile *torrent.Torrent, bar *progressbar.ProgressBar) {
 		time.Sleep(50 * time.Millisecond)
 		afterSecond := tfile.Stats().BytesReadData
 		if err := bar.Add64(afterSecond.Int64() - current.Int64()); err != nil {
+			if errors.Is(err, errors.New("current number exceeds max")) {
+				bar.ChangeMax((int(float64(bar.GetMax()) * 1.1))) // Increases max length of bar by 10%.
+			}
 			cobra.CheckErr(err)
 		}
 	}
