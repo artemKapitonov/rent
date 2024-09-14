@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -22,9 +23,16 @@ var settingCmd = &cobra.Command{
 func SetOutDir(cmd *cobra.Command, args []string) {
 	outPath := args[0]
 
-	if !filepath.IsAbs(outPath) {
-		cobra.CompErrorln(`The path does not exist. Please write absolute path for output file.`)
+	stat, err := os.Stat(outPath)
+	if os.IsNotExist(err) || stat == nil {
+		cobra.CheckErr(err)
 	}
+
+	if !stat.IsDir() {
+		outPath = filepath.Dir(outPath)
+	}
+
+	fmt.Println(outPath)
 
 	// Read in the config file
 	setConfigFile()
@@ -32,7 +40,7 @@ func SetOutDir(cmd *cobra.Command, args []string) {
 	viper.Set("out_dir", outPath)
 
 	// Save the changes
-	err := viper.WriteConfig()
+	err = viper.WriteConfig()
 	cobra.CheckErr(err)
 }
 

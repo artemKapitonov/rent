@@ -19,7 +19,7 @@ import (
 var stderr = os.Stderr
 
 var downlaodCmd = &cobra.Command{
-	Use: "download",
+	Use:   "download",
 	Short: `Designed for installing and downloading a torrent file.`,
 	Long: `Designed for installing and downloading a torrent file. When using this command,
 	Rent will download the specified torrent file to your computer.`,
@@ -112,6 +112,10 @@ func move(pathToFile string, fileName string, done bool) error {
 	}
 	newPath := getNewPath(fileName)
 	currentPath := getCurrentPath(fileName)
+
+	if newPath == "" {
+		return nil
+	}
 
 	return rename(currentPath, newPath)
 }

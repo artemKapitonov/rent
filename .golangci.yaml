@@ -20,7 +20,6 @@ linters-settings:
       - performance
       - style
   govet:
-    check-shadowing: true
     enable:
       - fieldalignment
 
@@ -39,11 +38,11 @@ linters:
     - musttag
     - exhaustruct
     - gomnd
-    - varnamelen #Длина имён переменных
+    - varnamelen
     - gochecknoglobals
     - godox
     - gci
-    - wrapcheck #todo включить отдельно!
+    - wrapcheck
     - gofumpt
     - exhaustivestruct
     - varcheck
@@ -55,7 +54,6 @@ linters:
     - structcheck
     - maligned
     - deadcode
-    - structcheck
     - depguard
     - goerr113
 
