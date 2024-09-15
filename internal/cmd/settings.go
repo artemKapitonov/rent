@@ -15,8 +15,9 @@ var settingCmd = &cobra.Command{
 	Long: `Set default output directory for torrent files.
 	Write command: rent setting <absolute/path/to/output_directory>.
 	By default it $HOME directory.`,
+	Args:    cobra.MinimumNArgs(1),
 	Run:     SetOutDir,
-	Example: "rent settings /home/Видео",
+	Example: "rent setting /home/Видео/",
 }
 
 // SetOutDir set output directory for moving files.
@@ -32,7 +33,9 @@ func SetOutDir(cmd *cobra.Command, args []string) {
 		outPath = filepath.Dir(outPath)
 	}
 
-	fmt.Println(outPath)
+	if outPath[len(outPath)-1] != '/' {
+		outPath += "/"
+	}
 
 	// Read in the config file
 	setConfigFile()
@@ -42,6 +45,8 @@ func SetOutDir(cmd *cobra.Command, args []string) {
 	// Save the changes
 	err = viper.WriteConfig()
 	cobra.CheckErr(err)
+
+	fmt.Println("Output directory has been successfuly selected  :)")
 }
 
 // setConfigFile set config file name for writing output directory.
