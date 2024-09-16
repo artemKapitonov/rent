@@ -16,21 +16,31 @@ import (
 	"github.com/spf13/viper"
 )
 
+const timeOfUpdatingSpeed = 50 * time.Millisecond
+
 var stderr = os.Stderr
 
 var downlaodCmd = &cobra.Command{
 	Use:   "download",
-	Short: `Designed for installing and downloading a torrent file.`,
+	Short: `Designed for installing and downloading a torrent file`,
 	Long: `Designed for installing and downloading a torrent file. When using this command,
-	Rent will download the specified torrent file to your computer.`,
+rent will download the specified torrent file to your computer`,
 	Run:               download,
-	Args:              cobra.MinimumNArgs(1),
+	Args:              onlyOneArg,
 	Example:           "rent download path/to/<some_name>.torrent",
 	ValidArgsFunction: completeTorrentFiles,
 }
 
+func onlyOneArg(_ *cobra.Command, args []string) error {
+	if len(args) != 1 {
+		return errors.New("command accepts only 1 argument, no less and no more")
+	}
+
+	return nil
+}
+
 // completeTorrentFiles returns files ending on ".torrent" in current directory.
-func completeTorrentFiles(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func completeTorrentFiles(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 	files, err := filepath.Glob("*.torrent")
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
@@ -40,7 +50,7 @@ func completeTorrentFiles(cmd *cobra.Command, args []string, toComplete string) 
 }
 
 // download cobra command for downloading torrent files.
-func download(cmd *cobra.Command, args []string) {
+func download(_ *cobra.Command, args []string) {
 	pathToFile, err := getTfilePath(args)
 	cobra.CheckErr(err)
 
@@ -52,6 +62,21 @@ func download(cmd *cobra.Command, args []string) {
 
 	<-tfile.GotInfo()
 
+	bar := createProgressBar(tfile)
+
+	go loading(tfile, bar)
+	tfile.DownloadAll()
+
+	go shutdown(client)
+
+	done := client.WaitAll()
+
+	fileName := tfile.Info().Name
+	err = move(pathToFile, fileName, done)
+	cobra.CheckErr(err)
+}
+
+func createProgressBar(tfile *torrent.Torrent) *progressbar.ProgressBar {
 	bar := progressbar.NewOptions(
 		int(tfile.Info().TotalLength()),
 		progressbar.OptionSetWriter(stderr),
@@ -68,48 +93,43 @@ func download(cmd *cobra.Command, args []string) {
 		}),
 	)
 
-	go loading(tfile, bar)
-	tfile.DownloadAll()
-
-	go shutdown(client)
-
-	done := client.WaitAll()
-
-	fileName := tfile.Info().Name
-	err = move(pathToFile, fileName, done)
-
-	cobra.CheckErr(err)
+	return bar
 }
 
 func getTfilePath(args []string) (string, error) {
 	if len(args) != 1 {
-		return "", errors.New("Invalid argument")
+		return "", errors.New("invalid argument: expected exactly one argument")
 	}
-	filePath := args[0]
 
-	arr := strings.Split(filePath, ".")
-	if arr[len(arr)-1] != "torrent" {
-		return "", errors.New("It is not torrent file!")
+	filePath := args[0]
+	if !isTorrentFile(filePath) {
+		return "", errors.New("invalid file type: expected a .torrent file")
 	}
 
 	return filePath, nil
 }
 
+// isTorrentFile checks if the given file path has a .torrent extension.
+func isTorrentFile(filePath string) bool {
+	return strings.HasSuffix(filePath, ".torrent")
+}
+
 func shutdown(client *torrent.Client) {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT)
-	<-ch
 
+	<-ch
 	client.Closed()
 	client.Close()
 }
 
-func move(pathToFile string, fileName string, done bool) error {
+func move(pathToFile, fileName string, done bool) error {
 	if done {
-		fmt.Fprintln(stderr, "\nFile successfily downloaded :)")
+		fmt.Fprintln(stderr, "\nFile successfully downloaded :)")
 	} else {
-		fmt.Fprintln(stderr, "\n Download was paused ")
+		fmt.Fprintln(stderr, "\nDownload was paused.")
 	}
+
 	newPath := getNewPath(fileName)
 	currentPath := getCurrentPath(fileName)
 
@@ -120,69 +140,64 @@ func move(pathToFile string, fileName string, done bool) error {
 	return rename(currentPath, newPath)
 }
 
-// getCurrentPath returns absolute path of files from torrent file.
+// getCurrentPath returns the absolute path of the downloaded file.
 func getCurrentPath(name string) string {
-
 	currentPath, err := filepath.Abs(filepath.Base(name))
 	cobra.CheckErr(err)
 	return currentPath
 }
 
-// getNewPath returns path from .config/settings.yaml file + name of file.
+// getNewPath constructs the new path from the config and file name.
 func getNewPath(name string) string {
 	setConfigFile()
-
-	return viper.GetString("out_dir") + name
+	return filepath.Join(viper.GetString("out_dir"), name)
 }
 
-// rename move file with check existing .
-func rename(oldPath string, newPath string) error {
+// rename moves the file to the new path, checking for existing files.
+func rename(oldPath, newPath string) error {
+	newPath = getUniqueName(newPath)
+
 	err := os.Rename(oldPath, newPath)
 	if err != nil {
-		newPath = checkExist(err, newPath)
-		err = os.Rename(oldPath, newPath)
+		return errors.New("Can't move file to output directory")
 	}
 
-	return err
+	return nil
 }
 
-// checkExist is check if file or dir exist and add Unix time for unicue name.
-func checkExist(err error, newPath string) string {
+// getUniqueName generates a unique file name for the directory.
+func getUniqueName(newPath string) string {
 	defPath := viper.GetString("out_dir")
+	baseName := filepath.Base(newPath)
 
-	if errors.Is(err, os.ErrExist) {
-		newPath = getUniqueName(newPath, defPath)
-	}
+	arr := strings.Split(baseName, ".")
 
-	return newPath
-}
-
-// getUniqueName returns unique file name for dircetory.
-func getUniqueName(newPath string, defPath string) string {
-	var indx int
-	arr := strings.Split(filepath.Base(newPath), ".")
-	if len(arr) >= 2 {
-		indx = len(arr) - 2
-	} else {
+	// Determine the index to append the timestamp
+	indx := len(arr) - 2
+	if len(arr) < 2 {
 		indx = 0
 	}
 
-	arr[indx] += fmt.Sprintf("_(%s)", time.Now().Format(time.DateTime))
+	arr[indx] += fmt.Sprintf("_(%s)", time.Now().Format("2006-01-02_15-04-05"))
 
-	newPath = defPath + "/" + strings.Join(arr, ".")
-	return newPath
+	return filepath.Join(defPath, strings.Join(arr, "."))
 }
 
-// loading add points to progress bar every 50 Millisecond.
+// loading updates the progress bar every 50 milliseconds.
 func loading(tfile *torrent.Torrent, bar *progressbar.ProgressBar) {
-	fmt.Fprintf(stderr, "\n Start downloading: %s \n", tfile.Name())
+	fmt.Fprintf(stderr, "\nStart downloading: %s\n", tfile.Name())
+
 	for !tfile.Complete.Bool() {
 		current := tfile.Stats().BytesReadData
-		time.Sleep(50 * time.Millisecond)
+
+		time.Sleep(timeOfUpdatingSpeed)
+
 		afterSecond := tfile.Stats().BytesReadData
-		if err := bar.Add64(afterSecond.Int64() - current.Int64()); err != nil {
+		bytesRead := afterSecond.Int64() - current.Int64()
+
+		if err := bar.Add64(bytesRead); err != nil {
 			if errors.Is(err, errors.New("current number exceeds max")) {
-				bar.ChangeMax((int(float64(bar.GetMax()) * 1.1))) // Increases max length of bar by 10%.
+				bar.ChangeMax(int(float64(bar.GetMax()) * 1.1)) // Increase max length of bar by 10%.
 			}
 			cobra.CheckErr(err)
 		}

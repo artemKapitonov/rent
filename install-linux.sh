@@ -1,13 +1,21 @@
 # Проверяем, установлен ли Go
 if ! command -v go &> /dev/null; then
-    echo "Go не установлен. Устанавливаем Go с помощью Homebrew..."
-    # Установка Go через Homebrew
-    brew install go
+    echo "Go не установлен. Устанавливаем Go с помощью"
+    curl -O https://dl.google.com/go/go1.22.1.linux-amd64.tar.gz
+    sudo tar -C /usr/local -xzf go1.22.1.linux-amd64.tar.gz
+    export PATH=$PATH:/usr/local/go/bin
+    export GOPATH=$HOME/go
+    echo "export PATH=$PATH:$GOPATH/bin" >> ~/.bashrc
+    echo "export PATH=$PATH:$GOPATH/bin" >> ~/.zshrc
 fi
 
 # Установка пакета
 echo "Устанавливаем пакет rent..."
-go install github.com/artemKapitonov/rent
+
+git clone https://github.com/artemKapitonov/rent
+cd rent
+go build
+sudo mv rent /usr/local/bin
 
 # Создаем директорию .config/rent
 mkdir -p "$HOME/.config/rent"
