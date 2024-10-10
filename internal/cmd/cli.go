@@ -25,7 +25,7 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.AddCommand(downlaodCmd)
+	rootCmd.AddCommand(downloadCmd)
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	rootCmd.AddCommand(settingCmd)
 }

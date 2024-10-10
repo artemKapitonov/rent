@@ -17,10 +17,11 @@ import (
 )
 
 const timeOfUpdatingSpeed = 50 * time.Millisecond
+const increaseFiveProcent = 1.05
 
 var stderr = os.Stderr
 
-var downlaodCmd = &cobra.Command{
+var downloadCmd = &cobra.Command{
 	Use:   "download",
 	Short: `Designed for installing and downloading a torrent file`,
 	Long: `Designed for installing and downloading a torrent file. When using this command,
@@ -70,9 +71,12 @@ func download(_ *cobra.Command, args []string) {
 	go shutdown(client)
 
 	done := client.WaitAll()
+	if done {
+		cobra.WriteStringAndCheck(stderr, "Download was completed successfully :)")
+	}
 
 	fileName := tfile.Info().Name
-	err = move(pathToFile, fileName, done)
+	err = move(fileName, done)
 	cobra.CheckErr(err)
 }
 
@@ -120,14 +124,17 @@ func shutdown(client *torrent.Client) {
 
 	<-ch
 	client.Closed()
-	client.Close()
+
+	if err := errors.Join(client.Close()...); err != nil {
+		cobra.WriteStringAndCheck(stderr, err.Error())
+	}
 }
 
-func move(pathToFile, fileName string, done bool) error {
+func move(fileName string, done bool) error {
 	if done {
-		fmt.Fprintln(stderr, "\nFile successfully downloaded :)")
+		cobra.WriteStringAndCheck(stderr, "\nFile successfully downloaded :)")
 	} else {
-		fmt.Fprintln(stderr, "\nDownload was paused.")
+		cobra.WriteStringAndCheck(stderr, "\nDownload was paused.")
 	}
 
 	newPath := getNewPath(fileName)
@@ -144,6 +151,7 @@ func move(pathToFile, fileName string, done bool) error {
 func getCurrentPath(name string) string {
 	currentPath, err := filepath.Abs(filepath.Base(name))
 	cobra.CheckErr(err)
+
 	return currentPath
 }
 
@@ -159,7 +167,7 @@ func rename(oldPath, newPath string) error {
 
 	err := os.Rename(oldPath, newPath)
 	if err != nil {
-		return errors.New("Can't move file to output directory")
+		return errors.New("can't move file to output directory")
 	}
 
 	return nil
@@ -178,28 +186,36 @@ func getUniqueName(newPath string) string {
 		indx = 0
 	}
 
-	arr[indx] += fmt.Sprintf("_(%s)", time.Now().Format("2006-01-02_15-04-05"))
+	arr[indx] += fmt.Sprintf(
+		"_(%s)",
+		time.Now().Format("2006-01-02_15-04-05"),
+	)
 
 	return filepath.Join(defPath, strings.Join(arr, "."))
 }
 
 // loading updates the progress bar every 50 milliseconds.
 func loading(tfile *torrent.Torrent, bar *progressbar.ProgressBar) {
-	fmt.Fprintf(stderr, "\nStart downloading: %s\n", tfile.Name())
+	cobra.WriteStringAndCheck(
+		stderr,
+		"Start downloading: %s"+tfile.Name(),
+	)
 
 	for !tfile.Complete.Bool() {
 		current := tfile.Stats().BytesReadData
 
 		time.Sleep(timeOfUpdatingSpeed)
 
-		afterSecond := tfile.Stats().BytesReadData
-		bytesRead := afterSecond.Int64() - current.Int64()
+		afterTime := tfile.Stats().BytesReadData
+		bytesRead := afterTime.Int64() - current.Int64()
 
 		if err := bar.Add64(bytesRead); err != nil {
 			if errors.Is(err, errors.New("current number exceeds max")) {
-				bar.ChangeMax(int(float64(bar.GetMax()) * 1.1)) // Increase max length of bar by 10%.
+				bar.ChangeMax(int(float64(bar.GetMax()) * increaseFiveProcent)) // Increase max length of bar by 5%.
+				continue
 			}
-			cobra.CheckErr(err)
+
+			cobra.WriteStringAndCheck(stderr, err.Error())
 		}
 	}
 }
